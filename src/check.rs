@@ -45,7 +45,7 @@ pub fn check(files: &[File]) -> Vec<Problem> {
             message,
         })
     };
-    // support the old snapshot until all clients have switched in one commit
+    // historical snapshots stored projects under memory/
     let migrated = files.iter().any(|file| {
         ["projects/", "plans/", "notes/"]
             .iter()
@@ -58,8 +58,12 @@ pub fn check(files: &[File]) -> Vec<Problem> {
 
     for file in files.iter().filter(|file| is_wiki_content(&file.path)) {
         let path = file.path.as_str();
-        if migrated && path.starts_with("memory/") {
-            report(path, "legacy memory/ path in a migrated vault".to_string());
+        if migrated
+            && ["memory/", "global/", "prompts/"]
+                .iter()
+                .any(|prefix| path.starts_with(prefix))
+        {
+            report(path, "retired directory in a migrated vault".to_string());
             continue;
         }
         let scope = match notes::classify(path) {
@@ -244,11 +248,35 @@ mod tests {
         assert!(check(&files).is_empty());
         files.retain(|f| f.path != PLANS_INDEX && f.path != "projects/tools/tools.md");
         files.push(file("memory/old.md", &note("finding", "")));
+        files.push(file(
+            "global/tasks.md",
+            &note("rules", "applies_to: [tasks]\n"),
+        ));
+        files.push(file("prompts/role.md", &note("prompt", "")));
         let paths: Vec<_> = check(&files).into_iter().map(|p| p.path).collect();
         assert_eq!(
             paths,
-            ["memory/old.md", PLANS_INDEX, "projects/tools/tools.md"]
+            [
+                "global/tasks.md",
+                "memory/old.md",
+                PLANS_INDEX,
+                "projects/tools/tools.md",
+                "prompts/role.md"
+            ]
         );
+    }
+
+    #[test]
+    fn current_notes_reject_retired_skill_metadata() {
+        let files = [
+            file("README.md", "# Wiki"),
+            file(PLANS_INDEX, "# Plans"),
+            file("notes/role.md", &note("prompt", "applies_to: [coding]\n")),
+        ];
+        let problems = check(&files);
+        assert_eq!(problems.len(), 2);
+        assert!(problems.iter().any(|p| p.message.contains("applies_to")));
+        assert!(problems.iter().any(|p| p.message.contains("prompt")));
     }
 
     #[test]

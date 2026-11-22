@@ -14,7 +14,7 @@ Validate the wiki that contains the current directory.
 
   (no option)  check the working tree, including untracked files
   --staged     check what is staged for the next commit, and reject staged
-               changes to README.md or global/ unless WIKI_ALLOW_PROTECTED=1";
+               changes to README.md or legacy global/ unless WIKI_ALLOW_PROTECTED=1";
 
 const ALLOW_PROTECTED: &str = "WIKI_ALLOW_PROTECTED";
 

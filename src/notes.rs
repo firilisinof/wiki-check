@@ -12,7 +12,6 @@ pub const PLANS_INDEX: &str = "plans/index.md";
 const NOTE_KINDS: &[&str] = &[
     "overview",
     "rules",
-    "prompt",
     "configuration",
     "procedure",
     "finding",
@@ -29,7 +28,6 @@ const NOTE_FIELDS: &[&str] = &[
     "type",
     "tags",
     "status",
-    "applies_to",
     "things_project_id",
 ];
 const REFERENCE_FIELDS: &[&str] = &["title", "url", "description", "added", "tags", "status"];
@@ -312,20 +310,31 @@ pub fn parse(path: &str, scope: &Scope, markdown: &str) -> (Note, Vec<String>) {
         fields.date("added", false);
         note.kind = "reference".to_string();
     } else {
-        fields.only(NOTE_FIELDS);
+        let legacy = matches!(scope, Scope::TaskInstructions | Scope::Prompts)
+            || path.starts_with("memory/");
+        if legacy {
+            fields.only(&[NOTE_FIELDS, &["applies_to"]].concat());
+        } else {
+            fields.only(NOTE_FIELDS);
+        }
         fields.date("created", false);
         fields.date("verified", true);
         note.kind = fields.text("type");
-        if !note.kind.is_empty() && !NOTE_KINDS.contains(&note.kind.as_str()) {
+        if !note.kind.is_empty()
+            && !NOTE_KINDS.contains(&note.kind.as_str())
+            && !(legacy && note.kind == "prompt")
+        {
             fields
                 .problems
                 .push(format!("type {:?} is not in the vocabulary", note.kind));
         }
-        note.applies_to = fields.string_list("applies_to", false);
-        if !note.applies_to.iter().all(|label| is_label(label)) {
-            fields
-                .problems
-                .push("applies_to labels use lowercase letters, digits, and hyphens".to_string());
+        if legacy {
+            note.applies_to = fields.string_list("applies_to", false);
+            if !note.applies_to.iter().all(|label| is_label(label)) {
+                fields.problems.push(
+                    "applies_to labels use lowercase letters, digits, and hyphens".to_string(),
+                );
+            }
         }
         if let Some(value) = fields.get("things_project_id")
             && value.as_str().is_none_or(|text| text.trim().is_empty())

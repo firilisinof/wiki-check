@@ -2,7 +2,7 @@
 
 Validation for a personal Markdown wiki kept in Git. Agents read and edit the
 wiki as plain files. This tool checks the layout and frontmatter before a
-commit, and refuses changes to the root instructions and task rules unless
+commit, and refuses changes to the root instructions unless
 the user allows them.
 
 ## Usage
@@ -17,7 +17,7 @@ wiki-check --staged   # what is staged for the next commit
 It prints one `path: problem` line per problem and exits with status 1 when
 there is any.
 
-`--staged` also rejects staged changes to `README.md` and `global/`. Set
+`--staged` also rejects staged changes to `README.md` (and to `global/` in historical vaults). Set
 `WIKI_ALLOW_PROTECTED=1` for a commit the user asked for. Install it as the
 wiki's pre-commit hook:
 
@@ -40,8 +40,6 @@ The path decides the scope:
 | Path | Scope |
 | --- | --- |
 | `README.md` | root instructions, protected, no frontmatter |
-| `global/*.md` | task rules, protected, must declare `applies_to` |
-| `prompts/*.md` | role prompts |
 | `references/*.md` | saved references |
 | `notes/*.md` | standalone notes |
 | `projects/<project>/*.md` | project notes, with `<project>.md` as the overview |
@@ -56,7 +54,7 @@ and `.githooks/` are left alone.
 
 - Notes have `created`, `verified` (a date or null), a one-sentence
   `description` ending in a period, a `type` from the vocabulary, and `tags`.
-  `status`, `applies_to`, and `things_project_id` are optional. No other
+  `status` and `things_project_id` are optional. No other
   field is allowed.
 - References have `title`, `url` with a scheme, `description`, `added`, and
   `tags`, and optionally `status`.
@@ -64,7 +62,7 @@ and `.githooks/` are left alone.
   state it.
 - Standalone, project, and plan notes are at most 4096 bytes.
 
-Older vaults using only the original `memory/` layout still validate. A migrated vault cannot mix in legacy paths.
+Older vaults using only the original `memory/` layout still validate. The current layout rejects `memory/`, `global/` and `prompts/`. Reusable workflows live in skills outside the vault.
 
 Links are not checked.
 
