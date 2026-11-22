@@ -7,7 +7,7 @@ use serde_yaml_ng::Value;
 
 pub const ROOT_PATH: &str = "README.md";
 pub const MAX_MEMORY_NOTE_BYTES: usize = 4096;
-const PROJECT_OVERVIEW: &str = "README.md";
+pub const PLANS_INDEX: &str = "plans/index.md";
 
 const NOTE_KINDS: &[&str] = &[
     "overview",
@@ -42,6 +42,8 @@ pub enum Scope {
     Prompts,
     References,
     Standalone,
+    PlanIndex,
+    Plan,
     Project(String),
 }
 
@@ -89,12 +91,13 @@ pub fn classify(path: &str) -> Result<Scope, String> {
         ["global", _] => Ok(Scope::TaskInstructions),
         ["prompts", _] => Ok(Scope::Prompts),
         ["references", _] => Ok(Scope::References),
+        ["plans", "index.md"] => Ok(Scope::PlanIndex),
+        ["plans", _] | ["plans", _, _] | ["plans", _, _, _] => Ok(Scope::Plan),
+        ["projects", project, _] => Ok(Scope::Project(project.to_string())),
+        ["notes", _] => Ok(Scope::Standalone),
         ["memory", _] => Ok(Scope::Standalone),
         ["memory", project, _] => Ok(Scope::Project(project.to_string())),
-        _ => Err(
-            "outside README.md, global/, prompts/, references/, memory/ and memory/<project>/"
-                .to_string(),
-        ),
+        _ => Err("outside the supported wiki layout".to_string()),
     }
 }
 
@@ -264,13 +267,12 @@ pub fn parse(path: &str, scope: &Scope, markdown: &str) -> (Note, Vec<String>) {
         kind: String::new(),
         status_declared: false,
         applies_to: Vec::new(),
-        is_project_overview: matches!(scope, Scope::Project(_))
-            && path.ends_with(&format!("/{PROJECT_OVERVIEW}")),
+        is_project_overview: matches!(scope, Scope::Project(name) if path == format!("projects/{name}/{name}.md") || path == format!("memory/{name}/README.md")),
     };
 
-    if *scope == Scope::Root {
+    if matches!(scope, Scope::Root | Scope::PlanIndex) {
         if markdown.starts_with("---\n") {
-            problems.push("root instructions must not have frontmatter".to_string());
+            problems.push("entry pages must not have frontmatter".to_string());
         }
         return (note, problems);
     }
@@ -335,12 +337,18 @@ pub fn parse(path: &str, scope: &Scope, markdown: &str) -> (Note, Vec<String>) {
     }
 
     if note.is_project_overview && note.kind != "overview" {
-        problems.push("a project README.md must have type overview".to_string());
+        problems.push("a project home must have type overview".to_string());
     }
-    let limited = matches!(scope, Scope::Standalone | Scope::Project(_));
+    if *scope == Scope::Plan && note.kind != "plan" {
+        problems.push("files under plans/ must have type plan".to_string());
+    }
+    if note.kind == "plan" && (path.starts_with("projects/") || path.starts_with("notes/")) {
+        problems.push("move plan notes to plans/".to_string());
+    }
+    let limited = matches!(scope, Scope::Standalone | Scope::Project(_) | Scope::Plan);
     if limited && markdown.len() > MAX_MEMORY_NOTE_BYTES {
         problems.push(format!(
-            "{} bytes exceeds the {MAX_MEMORY_NOTE_BYTES} byte limit for notes under memory/",
+            "{} bytes exceeds the {MAX_MEMORY_NOTE_BYTES} byte limit for notes",
             markdown.len()
         ));
     }

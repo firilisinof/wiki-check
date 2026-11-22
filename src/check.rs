@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::notes::{self, ROOT_PATH, Scope};
+use crate::notes::{self, PLANS_INDEX, ROOT_PATH, Scope};
 
 /// One file of a snapshot, from the working tree or the Git index.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -20,7 +20,15 @@ pub struct Problem {
     pub message: String,
 }
 
-const CONTENT_DIRECTORIES: &[&str] = &["global/", "prompts/", "references/", "memory/"];
+const CONTENT_DIRECTORIES: &[&str] = &[
+    "global/",
+    "prompts/",
+    "references/",
+    "memory/",
+    "projects/",
+    "plans/",
+    "notes/",
+];
 
 /// Files the wiki layout governs. Repository plumbing such as `.gitignore`
 /// and `.githooks/` is left alone.
@@ -37,12 +45,23 @@ pub fn check(files: &[File]) -> Vec<Problem> {
             message,
         })
     };
+    // support the old snapshot until all clients have switched in one commit
+    let migrated = files.iter().any(|file| {
+        ["projects/", "plans/", "notes/"]
+            .iter()
+            .any(|prefix| file.path.starts_with(prefix))
+    });
+    let mut has_index = false;
     let mut has_root = false;
     // project name to whether its README.md is present
     let mut projects: BTreeMap<String, bool> = BTreeMap::new();
 
     for file in files.iter().filter(|file| is_wiki_content(&file.path)) {
         let path = file.path.as_str();
+        if migrated && path.starts_with("memory/") {
+            report(path, "legacy memory/ path in a migrated vault".to_string());
+            continue;
+        }
         let scope = match notes::classify(path) {
             Ok(scope) => scope,
             Err(message) => {
@@ -76,6 +95,7 @@ pub fn check(files: &[File]) -> Vec<Problem> {
         }
         match &note.scope {
             Scope::Root => has_root = true,
+            Scope::PlanIndex => has_index = true,
             scope => {
                 if let Some(project) = scope.project() {
                     *projects.entry(project.to_string()).or_default() |= note.is_project_overview;
@@ -87,10 +107,18 @@ pub fn check(files: &[File]) -> Vec<Problem> {
     if !has_root {
         report(ROOT_PATH, "the wiki has no root instructions".to_string());
     }
+    if migrated && !has_index {
+        report(PLANS_INDEX, "missing plans index".to_string());
+    }
     for (project, _) in projects.iter().filter(|(_, has_overview)| !**has_overview) {
+        let path = if migrated {
+            format!("projects/{project}/{project}.md")
+        } else {
+            format!("memory/{project}/README.md")
+        };
         report(
-            &format!("memory/{project}/README.md"),
-            "the project has notes but no README.md overview".to_string(),
+            &path,
+            "the project has no overview at its home path".to_string(),
         );
     }
     problems.sort();
@@ -200,6 +228,26 @@ mod tests {
                 "memory/pi/sub/a.md",
                 "notes.md"
             ]
+        );
+    }
+
+    #[test]
+    fn migrated_vault_requires_a_plan_index_and_named_project_homes() {
+        let mut files = vec![
+            file("README.md", "# Wiki"),
+            file("projects/tools/tools.md", &note("overview", "")),
+            file("projects/tools/state.md", &note("state", "")),
+            file("plans/index.md", "# Plans"),
+            file("plans/tools/work.md", &note("plan", "status: proposed\n")),
+            file("notes/idea.md", &note("finding", "")),
+        ];
+        assert!(check(&files).is_empty());
+        files.retain(|f| f.path != PLANS_INDEX && f.path != "projects/tools/tools.md");
+        files.push(file("memory/old.md", &note("finding", "")));
+        let paths: Vec<_> = check(&files).into_iter().map(|p| p.path).collect();
+        assert_eq!(
+            paths,
+            ["memory/old.md", PLANS_INDEX, "projects/tools/tools.md"]
         );
     }
 

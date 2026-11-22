@@ -43,10 +43,12 @@ The path decides the scope:
 | `global/*.md` | task rules, protected, must declare `applies_to` |
 | `prompts/*.md` | role prompts |
 | `references/*.md` | saved references |
-| `memory/*.md` | standalone notes |
-| `memory/<project>/*.md` | project notes, with a `README.md` of type `overview` |
+| `notes/*.md` | standalone notes |
+| `projects/<project>/*.md` | project notes, with `<project>.md` as the overview |
+| `plans/index.md` | plain Markdown navigation |
+| `plans/` | plan notes, optionally grouped by project and plan |
 
-Any other file under these directories, a nested directory, a symlink, or a
+Any other file under these directories, an unsupported path, a symlink, or a
 Markdown file elsewhere is a problem. Repository files such as `.gitignore`
 and `.githooks/` are left alone.
 
@@ -60,7 +62,9 @@ and `.githooks/` are left alone.
   `tags`, and optionally `status`.
 - `status` is `current`, `proposed`, or `superseded`. Plans and research must
   state it.
-- Notes under `memory/` are at most 4096 bytes.
+- Standalone, project, and plan notes are at most 4096 bytes.
+
+Older vaults using only the original `memory/` layout still validate. A migrated vault cannot mix in legacy paths.
 
 Links are not checked.
 
